@@ -40,7 +40,7 @@ jobs:
         run: docker build -t mealie-ha-todo-sync:ci .
 
       - name: Run Trivy (table — visible in job log)
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mealie-ha-todo-sync:ci
           format: table
@@ -49,7 +49,7 @@ jobs:
 
       - name: Run Trivy (SARIF — uploads to Security tab)
         if: always()
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mealie-ha-todo-sync:ci
           format: sarif
