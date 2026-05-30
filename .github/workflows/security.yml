@@ -13,7 +13,7 @@ jobs:
     name: pip-audit (dependency CVEs)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v5
         with:
@@ -34,7 +34,7 @@ jobs:
       # upload step below if you make the repo private without GitHub Advanced Security.
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build image
         run: docker build -t mealie-ha-todo-sync:ci .
