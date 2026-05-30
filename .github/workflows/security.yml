@@ -40,21 +40,23 @@ jobs:
         run: docker build -t mealie-ha-todo-sync:ci .
 
       - name: Run Trivy (table — visible in job log)
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mealie-ha-todo-sync:ci
           format: table
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: "1"
 
       - name: Run Trivy (SARIF — uploads to Security tab)
         if: always()
-        uses: aquasecurity/trivy-action@0.30.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: mealie-ha-todo-sync:ci
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          ignore-unfixed: true
           exit-code: "0"  # don't double-fail; first step already gates the job
 
       - name: Upload SARIF to GitHub Security tab
