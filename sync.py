@@ -91,7 +91,6 @@ def main() -> None:
             raw_items = client.get_shopping_list_items(mealie_todo_entity, list_name, root)
             unchecked_raw = [r for r in raw_items if r.get("checked") is not True]
             ingredients = [parse_mealie_item(r) for r in unchecked_raw]
-            displays = [r.get("display") or r.get("note") or "" for r in unchecked_raw]
             log.info("Fetched %d unchecked ingredient(s)", len(ingredients))
             root.set_attribute("ingredients.count", len(ingredients))
 
@@ -139,11 +138,31 @@ def main() -> None:
                     log.info("  + adding: %s", summary)
                 client.add_item(destination_entity, summary, root)
 
-            # 6. Mark all synced Mealie items as complete so they don't reappear next cycle
-            log.info("Marking %d item(s) as complete in %s…", len(displays), mealie_todo_entity)
-            for display in displays:
-                log.info("  ✓ complete: %s", display)
-                client.mark_item_complete(mealie_todo_entity, display, root)
+            # 6. Mark all Mealie items complete so they don't reappear next cycle.
+            # Fetch the entity's actual items via todo.get_items so we use the exact
+            # summaries HA knows about — the display field from the Mealie service
+            # response doesn't always match what todo/update_item expects.
+            mealie_ha_items = client.get_destination_items(mealie_todo_entity, root)
+            to_complete = [
+                i for i in mealie_ha_items
+                if i.get("status") not in ("completed", "complete")
+            ]
+            log.info("Marking %d item(s) as complete in %s…", len(to_complete), mealie_todo_entity)
+            root.set_attribute("items.completed", len(to_complete))
+            mark_failed = 0
+            for item in to_complete:
+                summary = item.get("summary", "")
+                log.info("  ✓ complete: %s", summary)
+                try:
+                    client.mark_item_complete(mealie_todo_entity, summary, root)
+                except Exception as exc:
+                    log.warning("  ! failed to mark complete: %s — %s", summary, exc)
+                    mark_failed += 1
+            if mark_failed:
+                log.warning(
+                    "%d item(s) could not be marked complete — they may reappear next sync",
+                    mark_failed,
+                )
 
             root.set_status(Status(StatusCode.OK))
             log.info("Sync complete.")
