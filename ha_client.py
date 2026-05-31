@@ -107,16 +107,46 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def remove_item(self, entity_id: str, item_summary: str, parent_span: trace.Span) -> None:
+    def remove_item(
+        self,
+        entity_id: str,
+        item_summary: str,
+        parent_span: trace.Span,
+        reason: str = "",
+    ) -> None:
         with tracer.start_as_current_span(
             "ha.remove_item",
             context=trace.set_span_in_context(parent_span),
         ) as span:
             span.set_attribute("item.name", item_summary)
+            if reason:
+                span.set_attribute("remove.reason", reason)
             try:
                 self._post(
                     "/api/services/todo/remove_item",
                     {"entity_id": entity_id, "item": item_summary},
+                )
+                span.set_attribute("http.status_code", 200)
+            except requests.HTTPError as exc:
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+                span.record_exception(exc)
+                span.set_attribute("http.status_code", exc.response.status_code)
+                raise
+
+    def refresh_entity(self, entity_id: str, parent_span: trace.Span) -> None:
+        """Force HA to re-poll the entity from its integration source.
+
+        Called before todo.get_items on the Mealie entity so we always read the
+        exact summaries HA currently holds rather than a potentially stale cache.
+        """
+        with tracer.start_as_current_span(
+            "ha.refresh_entity", context=trace.set_span_in_context(parent_span)
+        ) as span:
+            span.set_attribute("entity_id", entity_id)
+            try:
+                self._post(
+                    "/api/services/homeassistant/update_entity",
+                    {"entity_id": entity_id},
                 )
                 span.set_attribute("http.status_code", 200)
             except requests.HTTPError as exc:

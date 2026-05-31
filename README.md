@@ -8,47 +8,62 @@ Every HA API call is instrumented with OpenTelemetry, producing a full distribut
 
 ## How it works
 
-1. Fetches this week's meal plan from HA via `mealie.get_mealplan`
-2. Fetches structured shopping list items (quantity, unit, food name) from Mealie via `mealie.get_shopping_list_items`
-3. Fetches current items from the destination todo entity via `todo.get_items`
-4. Removes any destination items carrying the configured tag (see [Item tagging](#item-tagging)) — in either suffix or prefix position
-5. Adds the current Mealie items to the destination entity with the tag applied
+1. Fetches unchecked shopping list items from Mealie via `mealie.get_shopping_list_items`
+2. Fetches current items from the destination todo entity via `todo.get_items`
+3. Removes any destination items carrying the configured tag (backward-compat cleanup — see [Item tagging](#item-tagging))
+4. For each Mealie item, checks whether a matching item already exists in the destination:
+   - **Match found:** removes the existing item, combines the quantities, adds the merged item
+   - **No match:** adds the item as-is
+5. Removes all synced items from the Mealie shopping list so they don't reappear on the next cycle
+
+Items are formatted as `food [unit] (qty)` — for example `chicken breast (5)` or `flour gram (100)`.
 
 All HA traffic goes through the standard REST API (`/api/services/…`). No HA-specific Python libraries are used, so OpenTelemetry auto-instrumentation wraps real HTTP calls and produces genuine latency and error data in traces.
 
 ### Ingredient requirement: parsed ingredients in Mealie
 
-Quantity consolidation (summing the same ingredient across multiple recipes) is handled entirely by Mealie's shopping list engine — **not by this script**. This only works correctly when ingredients are stored as parsed structured data (food + quantity + unit) rather than free-text notes. If a recipe's ingredients were entered or imported as free text, Mealie cannot consolidate them and they will appear as separate line items.
+Quantity consolidation across recipes is handled by Mealie's shopping list engine — **not by this script**. This only works correctly when ingredients are stored as parsed structured data (food + quantity + unit) rather than free-text notes. If a recipe's ingredients were entered or imported as free text, Mealie cannot consolidate them and they will appear as separate line items.
+
+---
+
+## Known limitations
+
+### Quantity embedded in the food name
+
+Some items in Mealie have the quantity baked into the food name rather than stored in the structured `quantity`/`unit` fields — for example `50g Parmesan` or `2 tins chopped tomatoes`. This happens when:
+
+- The recipe was imported and Mealie could not parse the ingredient into structured data
+- The ingredient was entered as a free-text note
+
+The script cannot distinguish these from plain food names, so they appear verbatim in the destination list (e.g. `50g Parmesan`) with no quantity merging. The only fix is to edit those ingredients in Mealie so they have properly structured food + quantity + unit fields.
+
+### Duplicate lines from the same sync batch
+
+If two recipes both include "chicken breast" and Mealie keeps them as separate shopping list entries, the script adds both to the destination in the same run — resulting in two lines (`chicken breast (2)` and `chicken breast (3)`) rather than one merged line (`chicken breast (5)`). The merge logic only combines a new Mealie item with an item that was already present in the destination from a *previous* sync. On the following sync the two lines will be merged if they are still there.
+
+The correct fix is to ensure Mealie consolidates quantities in its own shopping list before the sync runs — this is the shopping list engine's responsibility and works reliably when ingredients are stored as structured data.
 
 ---
 
 ## Item tagging
 
-Every item written to the destination todo entity is tagged to mark it as script-owned. The default format is a suffix:
+Item tagging is optional (default is no tag). When set, every item written to the destination entity carries the tag, which allows the script to identify and clean up its own items from previous deploys. The default format is a suffix:
 
 ```
-2 chicken breasts [Mealie]
-500 g flour [Mealie]
+chicken breast (5) [Mealie]
+flour gram (100) [Mealie]
 ```
 
 You can switch to a prefix by setting `ITEM_TAG_POSITION=prefix`:
 
 ```
-[Mealie] 2 chicken breasts
-[Mealie] 500 g flour
+[Mealie] chicken breast (5)
+[Mealie] flour gram (100)
 ```
 
-On each sync run the script removes all destination items carrying the tag in **either** position before adding the fresh set. This means changing `ITEM_TAG_POSITION` after an initial sync will not leave orphaned items.
+On each sync run the script removes all destination items carrying the tag in **either** position. This means changing `ITEM_TAG_POSITION` after an initial sync will not leave orphaned items. Manually added items (no tag) are never touched.
 
-Manually added items (no tag) are never touched.
-
-### Ticking off vs. deleting Mealie-managed items
-
-> **Important:** Delete Mealie-managed items from your shopping list rather than ticking them off (marking them complete).
-
-When you tick off an item in most HA todo integrations the item moves to a "completed" state but remains in the list. The `todo.get_items` response includes completed items, and `todo.remove_item` is used to clean up script-owned items regardless of their state — so a ticked-off item **will** be removed and re-added on the next sync.
-
-If your todo integration permanently removes items when they are ticked off (i.e., they no longer appear in `todo.get_items`), this is not an issue. Check the behaviour of your specific integration and delete rather than tick if in doubt.
+Since the script now removes synced items from the Mealie shopping list after each run (step 5 above), tagging is no longer required for correctness — items won't reappear regardless. Set `ITEM_TAG` only if you want to be able to visually distinguish script-managed items in your destination list.
 
 ---
 
@@ -82,7 +97,7 @@ Copy `.env.example` to `.env` and fill in your values:
 | `HA_TOKEN` | yes | — | HA long-lived access token |
 | `MEALIE_TODO_ENTITY` | yes | — | Mealie shopping list entity, e.g. `todo.mealie_weekly_shopping` |
 | `DESTINATION_TODO_ENTITY` | yes | — | Destination todo entity, e.g. `todo.shopping_list` |
-| `ITEM_TAG` | no | `[Mealie]` | Tag string appended/prepended to each synced item |
+| `ITEM_TAG` | no | `` (empty) | Tag string appended/prepended to each synced item; leave empty for no tag |
 | `ITEM_TAG_POSITION` | no | `suffix` | `suffix` or `prefix` |
 | `OTEL_ENABLED` | no | `true` | Set to `false` to disable tracing entirely (no collector required) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | `localhost:4317` | OTel Collector gRPC endpoint (host:port, no scheme) — ignored when `OTEL_ENABLED=false` |
