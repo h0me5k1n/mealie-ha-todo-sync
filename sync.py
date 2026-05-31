@@ -20,7 +20,13 @@ from opentelemetry.trace import Status, StatusCode
 from opentelemetry.trace import NoOpTracerProvider
 
 from ha_client import HAClient
-from diff import filter_tagged, parse_mealie_item
+from diff import (
+    IngredientItem,
+    filter_tagged,
+    normalise_dest_name,
+    parse_dest_quantity,
+    parse_mealie_item,
+)
 
 load_dotenv()
 
@@ -79,11 +85,13 @@ def main() -> None:
             client.ping(root)
             log.info("HA reachable")
 
-            # 2. Fetch structured shopping list items from Mealie via HA
+            # 2. Fetch unchecked shopping list items from Mealie via HA
             list_name = mealie_todo_entity.replace("todo.", "").replace("_", " ").title()
             log.info("Fetching shopping list items for %s…", mealie_todo_entity)
             raw_items = client.get_shopping_list_items(mealie_todo_entity, list_name, root)
-            ingredients = [parse_mealie_item(r) for r in raw_items if r.get("checked") is not True]
+            unchecked_raw = [r for r in raw_items if r.get("checked") is not True]
+            ingredients = [parse_mealie_item(r) for r in unchecked_raw]
+            displays = [r.get("display") or r.get("note") or "" for r in unchecked_raw]
             log.info("Fetched %d unchecked ingredient(s)", len(ingredients))
             root.set_attribute("ingredients.count", len(ingredients))
 
@@ -91,22 +99,51 @@ def main() -> None:
             log.info("Fetching current items from destination: %s…", destination_entity)
             dest_items = client.get_destination_items(destination_entity, root)
 
-            # 4. Remove all previously synced items (tagged in either position)
+            # 4. Remove old tagged items (cleanup / backward compat with previous deploys)
             to_remove = filter_tagged(dest_items, item_tag)
-            log.info("Removing %d previously synced item(s)…", len(to_remove))
+            log.info("Removing %d previously tagged item(s)…", len(to_remove))
             root.set_attribute("items.removed", len(to_remove))
             for item in to_remove:
-                summary = item.get("summary", "")
-                log.info("  - removing: %s", summary)
-                client.remove_item(destination_entity, summary, root)
+                log.info("  - removing: %s", item.get("summary", ""))
+                client.remove_item(destination_entity, item.get("summary", ""), root)
 
-            # 5. Add current Mealie items to destination
+            # Build a lookup of remaining (untagged) dest items by normalised name
+            remaining = [i for i in dest_items if i not in to_remove]
+            dest_by_norm = {
+                normalise_dest_name(i.get("summary", ""), item_tag): i
+                for i in remaining
+            }
+
+            # 5. Add Mealie items, merging quantities where a match already exists
             log.info("Adding %d item(s) to %s…", len(ingredients), destination_entity)
             root.set_attribute("items.added", len(ingredients))
             for ingredient in ingredients:
-                summary = ingredient.format_summary(item_tag, tag_position)
-                log.info("  + adding: %s", summary)
+                matched = dest_by_norm.get(ingredient.normalised_food)
+                if matched:
+                    dest_qty = parse_dest_quantity(matched.get("summary", ""))
+                    mealie_qty = ingredient.quantity if ingredient.quantity else 1.0
+                    combined_qty = dest_qty + mealie_qty
+                    merged = IngredientItem(
+                        food=ingredient.food,
+                        quantity=combined_qty,
+                        unit=ingredient.unit,
+                    )
+                    log.info(
+                        "  ~ merging: %s (%.4g + %.4g = %.4g)",
+                        ingredient.food, dest_qty, mealie_qty, combined_qty,
+                    )
+                    client.remove_item(destination_entity, matched.get("summary", ""), root)
+                    summary = merged.format_summary(item_tag, tag_position)
+                else:
+                    summary = ingredient.format_summary(item_tag, tag_position)
+                    log.info("  + adding: %s", summary)
                 client.add_item(destination_entity, summary, root)
+
+            # 6. Mark all synced Mealie items as complete so they don't reappear next cycle
+            log.info("Marking %d item(s) as complete in %s…", len(displays), mealie_todo_entity)
+            for display in displays:
+                log.info("  ✓ complete: %s", display)
+                client.mark_item_complete(mealie_todo_entity, display, root)
 
             root.set_status(Status(StatusCode.OK))
             log.info("Sync complete.")

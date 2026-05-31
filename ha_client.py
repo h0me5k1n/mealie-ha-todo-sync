@@ -125,6 +125,23 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
+    def mark_item_complete(self, entity_id: str, item_display: str, parent_span: trace.Span) -> None:
+        with tracer.start_as_current_span(
+            "ha.mark_item_complete", context=trace.set_span_in_context(parent_span)
+        ) as span:
+            span.set_attribute("item.name", item_display)
+            try:
+                self._post(
+                    "/api/services/todo/update_item",
+                    {"entity_id": entity_id, "item": item_display, "status": "completed"},
+                )
+                span.set_attribute("http.status_code", 200)
+            except requests.HTTPError as exc:
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+                span.record_exception(exc)
+                span.set_attribute("http.status_code", exc.response.status_code)
+                raise
+
     def add_item(self, entity_id: str, item_summary: str, parent_span: trace.Span) -> None:
         with tracer.start_as_current_span(
             "ha.add_item",

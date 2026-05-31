@@ -1,5 +1,5 @@
 import pytest
-from diff import IngredientItem, has_tag, filter_tagged, parse_mealie_item
+from diff import IngredientItem, has_tag, filter_tagged, normalise_dest_name, parse_dest_quantity, parse_mealie_item
 
 
 class TestHasTag:
@@ -45,35 +45,47 @@ class TestFilterTagged:
         items = [{"summary": "bread"}, {"summary": "butter"}]
         assert filter_tagged(items, "[Mealie]") == []
 
+    def test_empty_tag_returns_nothing(self):
+        items = [{"summary": "bread"}, {"summary": "butter"}]
+        assert filter_tagged(items, "") == []
+
 
 class TestFormatSummary:
     def test_suffix_with_quantity_and_unit(self):
         item = IngredientItem(food="flour", quantity=500, unit="g")
-        assert item.format_summary("[Mealie]", "suffix") == "500 g flour [Mealie]"
+        assert item.format_summary("[Mealie]", "suffix") == "flour g (500) [Mealie]"
 
     def test_prefix_with_quantity_and_unit(self):
         item = IngredientItem(food="flour", quantity=500, unit="g")
-        assert item.format_summary("[Mealie]", "prefix") == "[Mealie] 500 g flour"
+        assert item.format_summary("[Mealie]", "prefix") == "[Mealie] flour g (500)"
 
     def test_no_unit(self):
         item = IngredientItem(food="chicken breast", quantity=2, unit=None)
-        assert item.format_summary("[Mealie]", "suffix") == "2 chicken breast [Mealie]"
+        assert item.format_summary("[Mealie]", "suffix") == "chicken breast (2) [Mealie]"
 
     def test_no_quantity(self):
         item = IngredientItem(food="salt", quantity=None, unit=None)
         assert item.format_summary("[Mealie]", "suffix") == "salt [Mealie]"
 
-    def test_zero_quantity_omitted(self):
+    def test_zero_quantity_unit_shown_without_parens(self):
         item = IngredientItem(food="pepper", quantity=0, unit="tsp")
-        assert item.format_summary("[Mealie]", "suffix") == "tsp pepper [Mealie]"
+        assert item.format_summary("[Mealie]", "suffix") == "pepper tsp [Mealie]"
 
     def test_float_quantity_trimmed(self):
         item = IngredientItem(food="butter", quantity=1.5, unit="tbsp")
-        assert item.format_summary("[Mealie]", "suffix") == "1.5 tbsp butter [Mealie]"
+        assert item.format_summary("[Mealie]", "suffix") == "butter tbsp (1.5) [Mealie]"
 
     def test_whole_float_shows_as_int(self):
         item = IngredientItem(food="eggs", quantity=3.0, unit=None)
-        assert item.format_summary("[Mealie]", "suffix") == "3 eggs [Mealie]"
+        assert item.format_summary("[Mealie]", "suffix") == "eggs (3) [Mealie]"
+
+    def test_empty_tag_returns_plain_text(self):
+        item = IngredientItem(food="bread", quantity=None, unit=None)
+        assert item.format_summary("", "suffix") == "bread"
+
+    def test_empty_tag_with_quantity(self):
+        item = IngredientItem(food="chicken breast", quantity=5.0, unit=None)
+        assert item.format_summary("", "suffix") == "chicken breast (5)"
 
 
 class TestNormalisedFood:
@@ -89,6 +101,53 @@ class TestNormalisedFood:
 
     def test_preserves_double_s(self):
         assert IngredientItem(food="lass", quantity=None, unit=None).normalised_food == "lass"
+
+
+class TestNormaliseDestName:
+    def test_manually_added_leading_number(self):
+        # "2 chicken breasts" as manually entered by user
+        assert normalise_dest_name("2 chicken breasts", "") == "chicken breast"
+
+    def test_synced_unitless(self):
+        # "chicken breast (2)" from a previous sync cycle (no unit)
+        assert normalise_dest_name("chicken breast (2)", "") == "chicken breast"
+
+    def test_synced_with_unit(self):
+        # "flour g (500)" from a previous sync cycle (unit before parens)
+        assert normalise_dest_name("flour g (500)", "") == "flour"
+
+    def test_synced_with_unit_and_tag(self):
+        assert normalise_dest_name("flour g (500) [Mealie]", "[Mealie]") == "flour"
+
+    def test_synced_with_tag_prefix(self):
+        assert normalise_dest_name("[Mealie] chicken breast (2)", "[Mealie]") == "chicken breast"
+
+    def test_no_quantity(self):
+        assert normalise_dest_name("chicken breast", "") == "chicken breast"
+
+    def test_multiword_food_not_mangled(self):
+        # "breast" must NOT be stripped as a unit — it's part of the food name
+        assert normalise_dest_name("chicken breast (2)", "") == "chicken breast"
+
+
+class TestParseDestQuantity:
+    def test_synced_unitless(self):
+        assert parse_dest_quantity("chicken breast (2)") == 2.0
+
+    def test_synced_with_unit(self):
+        assert parse_dest_quantity("flour g (500)") == 500.0
+
+    def test_synced_float(self):
+        assert parse_dest_quantity("butter tbsp (1.5)") == 1.5
+
+    def test_manually_added_leading_number(self):
+        assert parse_dest_quantity("2 chicken breasts") == 2.0
+
+    def test_manually_added_float(self):
+        assert parse_dest_quantity("1.5 cups milk") == 1.5
+
+    def test_no_quantity_defaults_to_one(self):
+        assert parse_dest_quantity("chicken breast") == 1.0
 
 
 class TestParseMealieItem:
