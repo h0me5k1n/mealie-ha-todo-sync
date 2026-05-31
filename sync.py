@@ -74,10 +74,10 @@ def main() -> None:
 
     with tracer.start_as_current_span("meal_plan_sync") as root:
         try:
-            # 1. Fetch the meal plan (informational — confirms Mealie is alive)
-            log.info("Fetching meal plan from HA…")
-            meal_plan = client.get_meal_plan(root)
-            log.info("Meal plan fetched (%s entries)", len(meal_plan) if isinstance(meal_plan, list) else "?")
+            # 1. Confirm HA is reachable
+            log.info("Pinging HA…")
+            client.ping(root)
+            log.info("HA reachable")
 
             # 2. Fetch structured shopping list items from Mealie via HA
             list_name = mealie_todo_entity.replace("todo.", "").replace("_", " ").title()
