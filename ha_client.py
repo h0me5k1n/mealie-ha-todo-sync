@@ -7,6 +7,33 @@ from opentelemetry.trace import Status, StatusCode
 tracer = trace.get_tracer("mealie-ha-todo-sync")
 
 
+def _extract_items(data: object) -> list:
+    """Extract a flat item list from any HA service response shape."""
+    if isinstance(data, list):
+        return data
+    if not isinstance(data, dict):
+        return []
+    # HA wraps service responses: {"service_response": {entity_id: {"items": [...]}}}
+    if "service_response" in data:
+        items: list = []
+        for entity_data in data["service_response"].values():
+            if isinstance(entity_data, list):
+                items.extend(entity_data)
+            elif isinstance(entity_data, dict):
+                items.extend(entity_data.get("items", []))
+        return items
+    if "items" in data:
+        return data["items"]
+    # Flat {entity_id: [...]} or {entity_id: {"items": [...]}}
+    items = []
+    for entity_data in data.values():
+        if isinstance(entity_data, list):
+            items.extend(entity_data)
+        elif isinstance(entity_data, dict):
+            items.extend(entity_data.get("items", []))
+    return items
+
+
 class HAClient:
     def __init__(self, ha_url: str, ha_token: str):
         self._base = ha_url.rstrip("/")
@@ -50,7 +77,7 @@ class HAClient:
                     "/api/services/mealie/get_shopping_list_items?return_response",
                     {"entity_id": list_entity},
                 )
-                items = data if isinstance(data, list) else data.get("items", [])
+                items = _extract_items(data)
                 span.set_attribute("http.status_code", 200)
                 span.set_attribute("items.count", len(items))
                 return items
@@ -70,14 +97,7 @@ class HAClient:
                     "/api/services/todo/get_items?return_response",
                     {"entity_id": entity_id},
                 )
-                # Response shape: {entity_id: [...]} or {entity_id: {"items": [...]}}
-                items = []
-                if isinstance(data, dict):
-                    for entity_data in data.values():
-                        if isinstance(entity_data, list):
-                            items.extend(entity_data)
-                        elif isinstance(entity_data, dict):
-                            items.extend(entity_data.get("items", []))
+                items = _extract_items(data)
                 span.set_attribute("http.status_code", 200)
                 span.set_attribute("items.count", len(items))
                 return items
