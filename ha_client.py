@@ -70,11 +70,14 @@ class HAClient:
                     "/api/services/todo/get_items?return_response",
                     {"entity_id": entity_id},
                 )
-                # Response shape: {entity_id: {"items": [...]}}
+                # Response shape: {entity_id: [...]} or {entity_id: {"items": [...]}}
                 items = []
                 if isinstance(data, dict):
                     for entity_data in data.values():
-                        items.extend(entity_data.get("items", []))
+                        if isinstance(entity_data, list):
+                            items.extend(entity_data)
+                        elif isinstance(entity_data, dict):
+                            items.extend(entity_data.get("items", []))
                 span.set_attribute("http.status_code", 200)
                 span.set_attribute("items.count", len(items))
                 return items
