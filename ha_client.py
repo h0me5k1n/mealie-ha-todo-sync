@@ -24,17 +24,15 @@ class HAClient:
         resp.raise_for_status()
         return resp.json()
 
-    def get_meal_plan(self, parent_span: trace.Span) -> dict:
+    def ping(self, parent_span: trace.Span) -> None:
         with tracer.start_as_current_span(
-            "ha.get_meal_plan", context=trace.set_span_in_context(parent_span)
+            "ha.ping", context=trace.set_span_in_context(parent_span)
         ) as span:
             try:
-                data = self._post(
-                    "/api/services/mealie/get_mealplan?return_response", {}
-                )
+                url = f"{self._base}/api/"
+                resp = self._session.get(url)
+                resp.raise_for_status()
                 span.set_attribute("http.status_code", 200)
-                span.set_attribute("meal_plan.entry_count", len(data) if isinstance(data, list) else 1)
-                return data
             except requests.HTTPError as exc:
                 span.set_status(Status(StatusCode.ERROR, str(exc)))
                 span.record_exception(exc)
