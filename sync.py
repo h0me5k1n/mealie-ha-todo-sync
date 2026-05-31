@@ -152,11 +152,14 @@ def main() -> None:
                 client.add_item(destination_entity, summary, root)
 
             # 6. Mark all Mealie items complete so they don't reappear next cycle.
-            # Preferred: fetch the entity's actual items via todo.get_items so we use
-            # the exact summaries HA knows about. The Mealie entity is polled on a
-            # schedule so todo.get_items can return stale cached data (0 items)
-            # immediately after calling mealie.get_shopping_list_items; fall back to
-            # the display values captured from the service response when that happens.
+            # Force HA to re-poll Mealie before reading the entity's items — the entity
+            # is polled on a schedule and todo.get_items can return stale cached data
+            # (0 items, or capitalized food names differing from the raw display field).
+            log.info("Refreshing Mealie entity cache…")
+            try:
+                client.refresh_entity(mealie_todo_entity, root)
+            except Exception as exc:
+                log.warning("Entity refresh failed (%s); todo.get_items may be stale", exc)
             mealie_ha_items = client.get_destination_items(mealie_todo_entity, root)
             to_complete = [
                 i for i in mealie_ha_items
@@ -164,24 +167,24 @@ def main() -> None:
             ]
             if not to_complete and mealie_displays:
                 log.info(
-                    "HA entity shows 0 unchecked items (stale cache); "
+                    "HA entity shows 0 unchecked items after refresh; "
                     "using Mealie display values as fallback"
                 )
                 to_complete = [{"summary": d} for d in mealie_displays]
-            log.info("Marking %d item(s) as complete in %s…", len(to_complete), mealie_todo_entity)
+            log.info("Removing %d item(s) from %s…", len(to_complete), mealie_todo_entity)
             root.set_attribute("items.completed", len(to_complete))
             mark_failed = 0
             for item in to_complete:
                 summary = item.get("summary", "")
-                log.info("  ✓ complete: %s", summary)
+                log.info("  ✓ removing: %s", summary)
                 try:
-                    client.mark_item_complete(mealie_todo_entity, summary, root)
+                    client.remove_item(mealie_todo_entity, summary, root)
                 except Exception as exc:
-                    log.warning("  ! failed to mark complete: %s — %s", summary, exc)
+                    log.warning("  ! failed to remove: %s — %s", summary, exc)
                     mark_failed += 1
             if mark_failed:
                 log.warning(
-                    "%d item(s) could not be marked complete — they may reappear next sync",
+                    "%d item(s) could not be removed — they may reappear next sync",
                     mark_failed,
                 )
 

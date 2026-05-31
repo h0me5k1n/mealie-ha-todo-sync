@@ -125,6 +125,28 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
+    def refresh_entity(self, entity_id: str, parent_span: trace.Span) -> None:
+        """Force HA to re-poll the entity from its integration source.
+
+        Called before todo.get_items on the Mealie entity so we always read the
+        exact summaries HA currently holds rather than a potentially stale cache.
+        """
+        with tracer.start_as_current_span(
+            "ha.refresh_entity", context=trace.set_span_in_context(parent_span)
+        ) as span:
+            span.set_attribute("entity_id", entity_id)
+            try:
+                self._post(
+                    "/api/services/homeassistant/update_entity",
+                    {"entity_id": entity_id},
+                )
+                span.set_attribute("http.status_code", 200)
+            except requests.HTTPError as exc:
+                span.set_status(Status(StatusCode.ERROR, str(exc)))
+                span.record_exception(exc)
+                span.set_attribute("http.status_code", exc.response.status_code)
+                raise
+
     def mark_item_complete(self, entity_id: str, item_display: str, parent_span: trace.Span) -> None:
         with tracer.start_as_current_span(
             "ha.mark_item_complete", context=trace.set_span_in_context(parent_span)
