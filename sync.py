@@ -91,6 +91,13 @@ def main() -> None:
             raw_items = client.get_shopping_list_items(mealie_todo_entity, list_name, root)
             unchecked_raw = [r for r in raw_items if r.get("checked") is not True]
             ingredients = [parse_mealie_item(r) for r in unchecked_raw]
+            # Keep display values as fallback for mark-complete: todo.get_items on the
+            # Mealie entity can return stale cached data (0 items) immediately after
+            # calling mealie.get_shopping_list_items, so we may need these as a fallback.
+            mealie_displays = [
+                d for r in unchecked_raw
+                if (d := r.get("display") or r.get("note") or "")
+            ]
             log.info("Fetched %d unchecked ingredient(s)", len(ingredients))
             root.set_attribute("ingredients.count", len(ingredients))
 
@@ -106,8 +113,14 @@ def main() -> None:
                 log.info("  - removing: %s", item.get("summary", ""))
                 client.remove_item(destination_entity, item.get("summary", ""), root)
 
-            # Build a lookup of remaining (untagged) dest items by normalised name
-            remaining = [i for i in dest_items if i not in to_remove]
+            # Build a lookup of active (untagged, unchecked) dest items by normalised name.
+            # Completed items are deliberately excluded — merging quantities into a
+            # checked-off item would remove it from the completed state and reinstate it.
+            remaining = [
+                i for i in dest_items
+                if i not in to_remove
+                and i.get("status") not in ("completed", "complete")
+            ]
             dest_by_norm = {
                 normalise_dest_name(i.get("summary", ""), item_tag): i
                 for i in remaining
@@ -139,14 +152,22 @@ def main() -> None:
                 client.add_item(destination_entity, summary, root)
 
             # 6. Mark all Mealie items complete so they don't reappear next cycle.
-            # Fetch the entity's actual items via todo.get_items so we use the exact
-            # summaries HA knows about — the display field from the Mealie service
-            # response doesn't always match what todo/update_item expects.
+            # Preferred: fetch the entity's actual items via todo.get_items so we use
+            # the exact summaries HA knows about. The Mealie entity is polled on a
+            # schedule so todo.get_items can return stale cached data (0 items)
+            # immediately after calling mealie.get_shopping_list_items; fall back to
+            # the display values captured from the service response when that happens.
             mealie_ha_items = client.get_destination_items(mealie_todo_entity, root)
             to_complete = [
                 i for i in mealie_ha_items
                 if i.get("status") not in ("completed", "complete")
             ]
+            if not to_complete and mealie_displays:
+                log.info(
+                    "HA entity shows 0 unchecked items (stale cache); "
+                    "using Mealie display values as fallback"
+                )
+                to_complete = [{"summary": d} for d in mealie_displays]
             log.info("Marking %d item(s) as complete in %s…", len(to_complete), mealie_todo_entity)
             root.set_attribute("items.completed", len(to_complete))
             mark_failed = 0

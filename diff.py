@@ -69,13 +69,26 @@ def filter_tagged(items: list[dict], tag: str) -> list[dict]:
     return [item for item in items if has_tag(item.get("summary", ""), tag)]
 
 
-# Common cooking unit abbreviations used to detect the unit token in synced items.
-# "flour g (500)" → unit token "g" is stripped so the food name "flour" is isolated.
+# Unit tokens (abbreviations and full names) used to detect the unit in synced items.
+# "flour g (500)" or "flour gram (500)" → unit token stripped → food name "flour" isolated.
 _COOKING_UNITS: frozenset[str] = frozenset({
+    # weight — abbreviations
     "g", "kg", "mg",
+    # weight — full names (Mealie often stores the full name, e.g. unit.name = "gram")
+    "gram", "grams", "kilogram", "kilograms", "milligram", "milligrams",
+    # volume — abbreviations
     "ml", "l", "dl", "cl",
-    "tsp", "tbsp", "cup", "cups",
-    "oz", "lb", "lbs",
+    # volume — full names
+    "milliliter", "milliliters", "millilitre", "millilitres",
+    "liter", "liters", "litre", "litres",
+    # cooking measures — abbreviations
+    "tsp", "tbsp",
+    # cooking measures — full names
+    "teaspoon", "teaspoons", "tablespoon", "tablespoons",
+    "cup", "cups",
+    # imperial
+    "oz", "lb", "lbs", "ounce", "ounces", "pound", "pounds",
+    # countable
     "piece", "pieces", "pcs", "pc",
     "slice", "slices",
     "can", "cans",

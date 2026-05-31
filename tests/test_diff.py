@@ -112,9 +112,13 @@ class TestNormaliseDestName:
         # "chicken breast (2)" from a previous sync cycle (no unit)
         assert normalise_dest_name("chicken breast (2)", "") == "chicken breast"
 
-    def test_synced_with_unit(self):
-        # "flour g (500)" from a previous sync cycle (unit before parens)
+    def test_synced_with_unit_abbrev(self):
+        # "flour g (500)" — unit abbreviation before parens
         assert normalise_dest_name("flour g (500)", "") == "flour"
+
+    def test_synced_with_unit_full_name(self):
+        # "flour gram (500)" — Mealie stores full unit names (e.g. unit.name = "gram")
+        assert normalise_dest_name("flour gram (500)", "") == "flour"
 
     def test_synced_with_unit_and_tag(self):
         assert normalise_dest_name("flour g (500) [Mealie]", "[Mealie]") == "flour"
