@@ -111,7 +111,7 @@ def main() -> None:
             root.set_attribute("items.removed", len(to_remove))
             for item in to_remove:
                 log.info("  - removing: %s", item.get("summary", ""))
-                client.remove_item(destination_entity, item.get("summary", ""), root)
+                client.remove_item(destination_entity, item.get("summary", ""), root, reason="tag_cleanup")
 
             # Build a lookup of active (untagged, unchecked) dest items by normalised name.
             # Completed items are deliberately excluded — merging quantities into a
@@ -128,7 +128,7 @@ def main() -> None:
 
             # 5. Add Mealie items, merging quantities where a match already exists
             log.info("Adding %d item(s) to %s…", len(ingredients), destination_entity)
-            root.set_attribute("items.added", len(ingredients))
+            merged_count = 0
             for ingredient in ingredients:
                 matched = dest_by_norm.get(ingredient.normalised_food)
                 if matched:
@@ -144,12 +144,15 @@ def main() -> None:
                         "  ~ merging: %s (%.4g + %.4g = %.4g)",
                         ingredient.food, dest_qty, mealie_qty, combined_qty,
                     )
-                    client.remove_item(destination_entity, matched.get("summary", ""), root)
+                    client.remove_item(destination_entity, matched.get("summary", ""), root, reason="merge")
                     summary = merged.format_summary(item_tag, tag_position)
+                    merged_count += 1
                 else:
                     summary = ingredient.format_summary(item_tag, tag_position)
                     log.info("  + adding: %s", summary)
                 client.add_item(destination_entity, summary, root)
+            root.set_attribute("items.added", len(ingredients))
+            root.set_attribute("items.merged", merged_count)
 
             # 6. Mark all Mealie items complete so they don't reappear next cycle.
             # Force HA to re-poll Mealie before reading the entity's items — the entity
@@ -178,7 +181,7 @@ def main() -> None:
                 summary = item.get("summary", "")
                 log.info("  ✓ removing: %s", summary)
                 try:
-                    client.remove_item(mealie_todo_entity, summary, root)
+                    client.remove_item(mealie_todo_entity, summary, root, reason="mealie_sync")
                 except Exception as exc:
                     log.warning("  ! failed to remove: %s — %s", summary, exc)
                     mark_failed += 1

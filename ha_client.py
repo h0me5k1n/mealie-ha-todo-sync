@@ -107,12 +107,20 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def remove_item(self, entity_id: str, item_summary: str, parent_span: trace.Span) -> None:
+    def remove_item(
+        self,
+        entity_id: str,
+        item_summary: str,
+        parent_span: trace.Span,
+        reason: str = "",
+    ) -> None:
         with tracer.start_as_current_span(
             "ha.remove_item",
             context=trace.set_span_in_context(parent_span),
         ) as span:
             span.set_attribute("item.name", item_summary)
+            if reason:
+                span.set_attribute("remove.reason", reason)
             try:
                 self._post(
                     "/api/services/todo/remove_item",
