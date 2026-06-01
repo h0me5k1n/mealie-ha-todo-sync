@@ -22,9 +22,6 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: patch
-          major_string_token: "[MAJOR]"
-          minor_string_token: "[MINOR]"
-          patch_string_token: "[PATCH]"
           release_branches: main
           tag_prefix: v
 

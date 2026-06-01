@@ -4,14 +4,16 @@
 
 ## Version bump
 
-Include one of the following tokens in your commit message or PR title to control the release version on merge to main:
+The release is determined automatically from commit messages using these rules (highest match wins):
 
-- `[PATCH]` — bug fixes, documentation, minor tweaks (default if omitted)
-- `[MINOR]` — new backwards-compatible feature
-- `[MAJOR]` — breaking change
+| Commit prefix / token | Bump |
+|---|---|
+| `feat:` or `#minor` anywhere in message | minor |
+| `fix:` or `#patch` anywhere in message | patch |
+| `BREAKING CHANGE` or `#major` anywhere in message | major |
+| *(none of the above)* | patch (default) |
 
 ## Checklist
 
 - [ ] `CHANGELOG.md` updated with an entry for the upcoming version
-- [ ] Version bump token included in commit message or PR title (see above)
 - [ ] Tests pass locally (`pytest tests/`)
