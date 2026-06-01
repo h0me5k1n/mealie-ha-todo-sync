@@ -10,6 +10,8 @@ Include one of the following tokens in your commit message or PR title to contro
 - `[MINOR]` — new backwards-compatible feature
 - `[MAJOR]` — breaking change
 
-## Testing
+## Checklist
 
-<!-- How was this tested? -->
+- [ ] `CHANGELOG.md` updated with an entry for the upcoming version
+- [ ] Version bump token included in commit message or PR title (see above)
+- [ ] Tests pass locally (`pytest tests/`)
