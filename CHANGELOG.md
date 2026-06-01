@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.1 — 2026-06-01
+
+### [1.1.1](https://github.com/h0me5k1n/mealie-ha-todo-sync/compare/v1.1.0...v1.1.1) (2026-06-01)
+
+
+### Bug Fixes
+
+* move CHANGELOG update to PR workflow to avoid pushing to protected main ([78fe739](https://github.com/h0me5k1n/mealie-ha-todo-sync/commit/78fe7399eb8a741b0fe4d4b0e1d729c1bc37c1ad))
+
+
+
 ## v1.0.0 — 2026-06-01
 
 Initial stable release. Core sync loop is proven in production.
