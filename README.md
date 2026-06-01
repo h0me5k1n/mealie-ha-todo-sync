@@ -194,3 +194,34 @@ otel-collector-config.yaml
 pip install -r requirements.txt
 pytest tests/
 ```
+
+---
+
+## Versioning & Releases
+
+Every merge to `main` automatically creates a new [GitHub Release](https://github.com/h0me5k1n/mealie-ha-todo-sync/releases) and git tag using [semantic versioning](https://semver.org/).
+
+### Controlling the version bump
+
+Include one of these tokens anywhere in your merge commit message (or in the PR title / any commit on the branch):
+
+| Token | Effect |
+|---|---|
+| `[MAJOR]` | Bumps the major version — use for breaking changes |
+| `[MINOR]` | Bumps the minor version — use for new backwards-compatible features |
+| `[PATCH]` | Bumps the patch version — use for bug fixes and docs |
+| *(none)* | Defaults to a patch bump |
+
+The PR template pre-populates this guidance when you open a PR.
+
+### Pinning a specific version
+
+To run a specific release rather than the latest code, check out the tag after cloning:
+
+```bash
+git clone https://github.com/h0me5k1n/mealie-ha-todo-sync.git
+cd mealie-ha-todo-sync
+git checkout v1.0.0
+```
+
+If you deploy via an automation tool that clones this repo (e.g. Ansible's `git` module), pass the tag or branch name as the `version` parameter — both are accepted without any special handling.
