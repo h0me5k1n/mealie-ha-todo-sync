@@ -66,6 +66,7 @@ class HAClient:
 
     def get_shopping_list_items(self, list_entity: str, list_name: str) -> list:
         with tracer.start_as_current_span("ha.get_shopping_list_items") as span:
+            span.set_attribute("entity_id", list_entity)
             span.set_attribute("list.name", list_name)
             try:
                 data = self._post(
@@ -84,6 +85,7 @@ class HAClient:
 
     def get_destination_items(self, entity_id: str) -> list:
         with tracer.start_as_current_span("ha.get_destination_items") as span:
+            span.set_attribute("entity_id", entity_id)
             try:
                 data = self._post(
                     "/api/services/todo/get_items?return_response",
@@ -106,6 +108,7 @@ class HAClient:
         reason: str = "",
     ) -> None:
         with tracer.start_as_current_span("ha.remove_item") as span:
+            span.set_attribute("entity_id", entity_id)
             span.set_attribute("item.name", item_summary)
             if reason:
                 span.set_attribute("remove.reason", reason)
@@ -143,6 +146,7 @@ class HAClient:
 
     def mark_item_complete(self, entity_id: str, item_display: str) -> None:
         with tracer.start_as_current_span("ha.mark_item_complete") as span:
+            span.set_attribute("entity_id", entity_id)
             span.set_attribute("item.name", item_display)
             try:
                 self._post(
@@ -158,6 +162,7 @@ class HAClient:
 
     def add_item(self, entity_id: str, item_summary: str) -> None:
         with tracer.start_as_current_span("ha.add_item") as span:
+            span.set_attribute("entity_id", entity_id)
             span.set_attribute("item.name", item_summary)
             try:
                 self._post(
