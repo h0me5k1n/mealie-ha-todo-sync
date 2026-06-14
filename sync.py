@@ -82,34 +82,45 @@ def main() -> None:
         try:
             # Phase 1: Confirm HA is reachable and fetch Mealie shopping list
             list_name = mealie_todo_entity.replace("todo.", "").replace("_", " ").title()
-            with tracer.start_as_current_span("sync.fetch_mealie_list"):
+            with tracer.start_as_current_span("sync.fetch_mealie_list") as phase1:
                 log.info("Pinging HA…")
                 client.ping()
                 log.info("HA reachable")
                 log.info("Fetching shopping list items for %s…", mealie_todo_entity)
                 raw_items = client.get_shopping_list_items(mealie_todo_entity, list_name)
-            unchecked_raw = [r for r in raw_items if r.get("checked") is not True]
-            ingredients = [parse_mealie_item(r) for r in unchecked_raw]
-            # Keep display values as fallback for mark-complete: todo.get_items on the
-            # Mealie entity can return stale cached data (0 items) immediately after
-            # calling mealie.get_shopping_list_items, so we may need these as a fallback.
-            mealie_displays = [
-                d for r in unchecked_raw
-                if (d := r.get("display") or r.get("note") or "")
-            ]
-            log.info("Fetched %d unchecked ingredient(s)", len(ingredients))
+                unchecked_raw = [r for r in raw_items if r.get("checked") is not True]
+                ingredients = [parse_mealie_item(r) for r in unchecked_raw]
+                # Keep display values as fallback for mark-complete: todo.get_items on the
+                # Mealie entity can return stale cached data (0 items) immediately after
+                # calling mealie.get_shopping_list_items, so we may need these as a fallback.
+                mealie_displays = [
+                    d for r in unchecked_raw
+                    if (d := r.get("display") or r.get("note") or "")
+                ]
+                log.info("Fetched %d unchecked ingredient(s)", len(ingredients))
+                phase1.set_attribute("mealie.items.total", len(raw_items))
+                phase1.set_attribute("mealie.items.unchecked", len(unchecked_raw))
+                phase1.set_attribute("mealie.items", [i.food for i in ingredients])
             root.set_attribute("ingredients.count", len(ingredients))
 
             # Phase 2: Fetch current destination items
-            with tracer.start_as_current_span("sync.fetch_destination_list"):
+            with tracer.start_as_current_span("sync.fetch_destination_list") as phase2:
                 log.info("Fetching current items from destination: %s…", destination_entity)
                 dest_items = client.get_destination_items(destination_entity)
+                active_dest = [
+                    i for i in dest_items
+                    if i.get("status") not in ("completed", "complete")
+                ]
+                phase2.set_attribute("destination.items.total", len(dest_items))
+                phase2.set_attribute("destination.items.active", len(active_dest))
+                phase2.set_attribute("destination.items", [i.get("summary", "") for i in active_dest])
 
             # Phase 3: Remove old tagged items (cleanup / backward compat with previous deploys)
             with tracer.start_as_current_span("sync.cleanup_tagged_items") as phase3:
                 to_remove = filter_tagged(dest_items, item_tag)
                 log.info("Removing %d previously tagged item(s)…", len(to_remove))
                 phase3.set_attribute("items.removed", len(to_remove))
+                phase3.set_attribute("cleanup.items", [i.get("summary", "") for i in to_remove])
                 for item in to_remove:
                     log.info("  - removing: %s", item.get("summary", ""))
                     client.remove_item(destination_entity, item.get("summary", ""), reason="tag_cleanup")
@@ -131,6 +142,8 @@ def main() -> None:
             with tracer.start_as_current_span("sync.match_and_merge") as phase4:
                 log.info("Adding %d item(s) to %s…", len(ingredients), destination_entity)
                 merged_count = 0
+                merged_items: list[str] = []
+                added_items: list[str] = []
                 for ingredient in ingredients:
                     matched = dest_by_norm.get(ingredient.normalised_food)
                     if matched:
@@ -149,12 +162,18 @@ def main() -> None:
                         client.remove_item(destination_entity, matched.get("summary", ""), reason="merge")
                         summary = merged.format_summary(item_tag, tag_position)
                         merged_count += 1
+                        merged_items.append(
+                            f"{ingredient.food}: {dest_qty:.4g} + {mealie_qty:.4g} = {combined_qty:.4g}"
+                        )
                     else:
                         summary = ingredient.format_summary(item_tag, tag_position)
                         log.info("  + adding: %s", summary)
+                        added_items.append(summary)
                     client.add_item(destination_entity, summary)
                 phase4.set_attribute("items.added", len(ingredients))
                 phase4.set_attribute("items.merged", merged_count)
+                phase4.set_attribute("match.added.items", added_items)
+                phase4.set_attribute("match.merged.items", merged_items)
 
             # Phase 5: Mark all Mealie items complete so they don't reappear next cycle.
             # Force HA to re-poll Mealie before reading the entity's items — the entity
@@ -179,6 +198,7 @@ def main() -> None:
                     to_complete = [{"summary": d} for d in mealie_displays]
                 log.info("Removing %d item(s) from %s…", len(to_complete), mealie_todo_entity)
                 phase5.set_attribute("items.completed", len(to_complete))
+                phase5.set_attribute("complete.items", [i.get("summary", "") for i in to_complete])
                 mark_failed = 0
                 for item in to_complete:
                     summary = item.get("summary", "")
