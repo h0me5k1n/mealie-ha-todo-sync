@@ -1,5 +1,6 @@
 services:
   otel-collector:
+    profiles: [observability]
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
@@ -10,6 +11,7 @@ services:
       - jaeger
 
   jaeger:
+    profiles: [observability]
     image: jaegertracing/all-in-one:latest
     environment:
       - COLLECTOR_OTLP_ENABLED=true

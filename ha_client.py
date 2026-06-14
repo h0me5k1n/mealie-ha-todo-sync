@@ -51,10 +51,8 @@ class HAClient:
         resp.raise_for_status()
         return resp.json()
 
-    def ping(self, parent_span: trace.Span) -> None:
-        with tracer.start_as_current_span(
-            "ha.ping", context=trace.set_span_in_context(parent_span)
-        ) as span:
+    def ping(self) -> None:
+        with tracer.start_as_current_span("ha.ping") as span:
             try:
                 url = f"{self._base}/api/"
                 resp = self._session.get(url)
@@ -66,11 +64,8 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def get_shopping_list_items(self, list_entity: str, list_name: str, parent_span: trace.Span) -> list:
-        with tracer.start_as_current_span(
-            "ha.get_shopping_list_items",
-            context=trace.set_span_in_context(parent_span),
-        ) as span:
+    def get_shopping_list_items(self, list_entity: str, list_name: str) -> list:
+        with tracer.start_as_current_span("ha.get_shopping_list_items") as span:
             span.set_attribute("list.name", list_name)
             try:
                 data = self._post(
@@ -87,11 +82,8 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def get_destination_items(self, entity_id: str, parent_span: trace.Span) -> list:
-        with tracer.start_as_current_span(
-            "ha.get_destination_items",
-            context=trace.set_span_in_context(parent_span),
-        ) as span:
+    def get_destination_items(self, entity_id: str) -> list:
+        with tracer.start_as_current_span("ha.get_destination_items") as span:
             try:
                 data = self._post(
                     "/api/services/todo/get_items?return_response",
@@ -111,13 +103,9 @@ class HAClient:
         self,
         entity_id: str,
         item_summary: str,
-        parent_span: trace.Span,
         reason: str = "",
     ) -> None:
-        with tracer.start_as_current_span(
-            "ha.remove_item",
-            context=trace.set_span_in_context(parent_span),
-        ) as span:
+        with tracer.start_as_current_span("ha.remove_item") as span:
             span.set_attribute("item.name", item_summary)
             if reason:
                 span.set_attribute("remove.reason", reason)
@@ -133,15 +121,13 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def refresh_entity(self, entity_id: str, parent_span: trace.Span) -> None:
+    def refresh_entity(self, entity_id: str) -> None:
         """Force HA to re-poll the entity from its integration source.
 
         Called before todo.get_items on the Mealie entity so we always read the
         exact summaries HA currently holds rather than a potentially stale cache.
         """
-        with tracer.start_as_current_span(
-            "ha.refresh_entity", context=trace.set_span_in_context(parent_span)
-        ) as span:
+        with tracer.start_as_current_span("ha.refresh_entity") as span:
             span.set_attribute("entity_id", entity_id)
             try:
                 self._post(
@@ -155,10 +141,8 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def mark_item_complete(self, entity_id: str, item_display: str, parent_span: trace.Span) -> None:
-        with tracer.start_as_current_span(
-            "ha.mark_item_complete", context=trace.set_span_in_context(parent_span)
-        ) as span:
+    def mark_item_complete(self, entity_id: str, item_display: str) -> None:
+        with tracer.start_as_current_span("ha.mark_item_complete") as span:
             span.set_attribute("item.name", item_display)
             try:
                 self._post(
@@ -172,11 +156,8 @@ class HAClient:
                 span.set_attribute("http.status_code", exc.response.status_code)
                 raise
 
-    def add_item(self, entity_id: str, item_summary: str, parent_span: trace.Span) -> None:
-        with tracer.start_as_current_span(
-            "ha.add_item",
-            context=trace.set_span_in_context(parent_span),
-        ) as span:
+    def add_item(self, entity_id: str, item_summary: str) -> None:
+        with tracer.start_as_current_span("ha.add_item") as span:
             span.set_attribute("item.name", item_summary)
             try:
                 self._post(
