@@ -17,7 +17,7 @@ services:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686"  # Jaeger UI
-      - "14250:14250"  # gRPC for OTel collector → Jaeger
+      - "14250:14250"  # Jaeger model gRPC (legacy)
 
   sync:
     build: .
