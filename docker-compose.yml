@@ -1,5 +1,6 @@
 services:
   otel-collector:
+    profiles: [observability]
     image: otel/opentelemetry-collector-contrib:latest
     command: ["--config=/etc/otel/config.yaml"]
     volumes:
@@ -10,21 +11,17 @@ services:
       - jaeger
 
   jaeger:
+    profiles: [observability]
     image: jaegertracing/all-in-one:latest
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686"  # Jaeger UI
-      - "14250:14250"  # gRPC for OTel collector → Jaeger
+      - "14250:14250"  # Jaeger model gRPC (legacy)
 
   sync:
     build: .
     env_file: .env
-    environment:
-      # Override the endpoint to point at the collector container
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-    depends_on:
-      - otel-collector
     # Run once; restart manually or schedule via cron on the host.
     # To run on a schedule inside Docker, uncomment and adjust:
     # command: ["sh", "-c", "while true; do python sync.py; sleep 300; done"]
