@@ -22,11 +22,6 @@ services:
   sync:
     build: .
     env_file: .env
-    environment:
-      # Override the endpoint to point at the collector container
-      - OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector:4317
-    depends_on:
-      - otel-collector
     # Run once; restart manually or schedule via cron on the host.
     # To run on a schedule inside Docker, uncomment and adjust:
     # command: ["sh", "-c", "while true; do python sync.py; sleep 300; done"]
