@@ -176,10 +176,9 @@ def main() -> None:
                         added_items.append(summary)
                     to_add.append(summary)
 
-                otel_ctx = contextvars.copy_context()
                 with ThreadPoolExecutor() as executor:
                     futs = [
-                        executor.submit(otel_ctx.run, client.remove_item, destination_entity, s, "merge")
+                        executor.submit(contextvars.copy_context().run, client.remove_item, destination_entity, s, "merge")
                         for s in to_remove
                     ]
                     for f in futs:
@@ -187,7 +186,7 @@ def main() -> None:
 
                 with ThreadPoolExecutor() as executor:
                     futs = [
-                        executor.submit(otel_ctx.run, client.add_item, destination_entity, s)
+                        executor.submit(contextvars.copy_context().run, client.add_item, destination_entity, s)
                         for s in to_add
                     ]
                     for f in futs:
