@@ -5,9 +5,11 @@ Syncs ingredients from the Mealie shopping list (via HA service calls) into
 any Home Assistant todo entity, with full OpenTelemetry distributed tracing.
 """
 
+import contextvars
 import os
 import sys
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 from opentelemetry import trace
@@ -136,12 +138,18 @@ def main() -> None:
                 for i in remaining
             }
 
-            # Phase 4: Add Mealie items, merging quantities where a match already exists
+            # Phase 4: Add Mealie items, merging quantities where a match already exists.
+            # Pre-compute all operations first (no API calls), then run removes and adds
+            # concurrently — items are independent so there is no ordering constraint
+            # across them. contextvars.copy_context() propagates the OTel span context
+            # into each worker thread so child spans are correctly parented.
             with tracer.start_as_current_span("sync.match_and_merge") as phase4:
                 log.info("Adding %d item(s) to %s…", len(ingredients), destination_entity)
-                merged_count = 0
+                to_remove: list[str] = []
+                to_add: list[str] = []
                 merged_items: list[str] = []
                 added_items: list[str] = []
+
                 for ingredient in ingredients:
                     matched = dest_by_norm.get(ingredient.normalised_food)
                     if matched:
@@ -157,9 +165,8 @@ def main() -> None:
                             "  ~ merging: %s (%.4g + %.4g = %.4g)",
                             ingredient.food, dest_qty, mealie_qty, combined_qty,
                         )
-                        client.remove_item(destination_entity, matched.get("summary", ""), reason="merge")
+                        to_remove.append(matched.get("summary", ""))
                         summary = merged.format_summary(item_tag, tag_position)
-                        merged_count += 1
                         merged_items.append(
                             f"{ingredient.food}: {dest_qty:.4g} + {mealie_qty:.4g} = {combined_qty:.4g}"
                         )
@@ -167,9 +174,27 @@ def main() -> None:
                         summary = ingredient.format_summary(item_tag, tag_position)
                         log.info("  + adding: %s", summary)
                         added_items.append(summary)
-                    client.add_item(destination_entity, summary)
+                    to_add.append(summary)
+
+                otel_ctx = contextvars.copy_context()
+                with ThreadPoolExecutor() as executor:
+                    futs = [
+                        executor.submit(otel_ctx.run, client.remove_item, destination_entity, s, "merge")
+                        for s in to_remove
+                    ]
+                    for f in futs:
+                        f.result()
+
+                with ThreadPoolExecutor() as executor:
+                    futs = [
+                        executor.submit(otel_ctx.run, client.add_item, destination_entity, s)
+                        for s in to_add
+                    ]
+                    for f in futs:
+                        f.result()
+
                 phase4.set_attribute("items.added", len(ingredients))
-                phase4.set_attribute("items.merged", merged_count)
+                phase4.set_attribute("items.merged", len(merged_items))
                 phase4.set_attribute("match.added.items", added_items)
                 phase4.set_attribute("match.merged.items", merged_items)
 
