@@ -199,7 +199,9 @@ pytest tests/
 
 ## Versioning & Releases
 
-Every merge to `main` automatically creates a new [GitHub Release](https://github.com/h0me5k1n/mealie-ha-todo-sync/releases) and git tag using [semantic versioning](https://semver.org/).
+Merging a normal PR to `main` automatically creates a new [GitHub Release](https://github.com/h0me5k1n/mealie-ha-todo-sync/releases) and git tag using [semantic versioning](https://semver.org/).
+
+Dependabot PRs are the exception: merging one doesn't trigger an immediate release. Dependency updates arrive grouped (patch/minor bundled into one PR, major bumps kept separate for review, github-actions bumps in their own PR — see `.github/dependabot.yml`), and are batched into a single release cut by a scheduled job each Wednesday — or no release at all if nothing merged that week.
 
 ### Controlling the version bump
 
