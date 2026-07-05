@@ -178,7 +178,11 @@ sync.py                    # Main entrypoint
 ha_client.py               # HA REST API wrapper with OTel instrumentation
 diff.py                    # Ingredient parsing and tag logic
 tests/
+  conftest.py              # Shared OTel in-memory span exporter + env-cleanup fixtures
   test_diff.py             # Unit tests for diff.py
+  test_ha_client.py        # HAClient span/attribute/error-path coverage
+  test_sync_tracing.py     # _setup_tracing() branch coverage (NoOp vs real provider)
+  test_sync_main.py        # End-to-end main() flow, including span-parenting across threads
 requirements.txt
 .env.example
 Dockerfile

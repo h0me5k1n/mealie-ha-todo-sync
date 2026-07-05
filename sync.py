@@ -16,6 +16,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.trace import Status, StatusCode
 from opentelemetry.trace import NoOpTracerProvider
@@ -58,6 +59,7 @@ def _setup_tracing() -> None:
     exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
+    RequestsInstrumentor().instrument()
     log.info("Tracing enabled → %s", endpoint)
 
 
