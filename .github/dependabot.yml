@@ -6,6 +6,13 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      python-patch-minor:
+        update-types: ["minor", "patch"]
+      python-major:
+        update-types: ["major"]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -13,3 +20,8 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      github-actions:
+        patterns: ["*"]

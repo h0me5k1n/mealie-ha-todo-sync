@@ -3,21 +3,55 @@ name: Release
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * 3"  # Wednesday 06:00 UTC — weekly catch-up for dependency-only merges
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
   tag-and-release:
-    if: github.actor != 'dependabot[bot]'
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      - name: Decide whether to release
+        id: decide
+        run: |
+          # A push whose commit message is a dependabot merge doesn't get an
+          # immediate release — those are batched into the weekly scheduled run below.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            msg=$(git log -1 --format=%s)
+            if [[ "$msg" == build\(deps\)* ]]; then
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # On the scheduled catch-up run, skip entirely if nothing merged since the last tag.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            latest=$(git tag --list 'v*.*.*' --sort=-version:refname | head -1)
+            if [ -n "$latest" ]; then
+              count=$(git rev-list "${latest}..HEAD" --count)
+              if [ "$count" -eq 0 ]; then
+                echo "release=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
+          fi
+
+          echo "release=true" >> "$GITHUB_OUTPUT"
+
       - name: Bump version and push tag
         id: tag
+        if: steps.decide.outputs.release == 'true'
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -26,6 +60,7 @@ jobs:
           tag_prefix: v
 
       - name: Create GitHub Release
+        if: steps.decide.outputs.release == 'true'
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ steps.tag.outputs.new_tag }}
