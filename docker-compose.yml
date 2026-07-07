@@ -1,24 +1,4 @@
 services:
-  otel-collector:
-    profiles: [observability]
-    image: otel/opentelemetry-collector-contrib:latest
-    command: ["--config=/etc/otel/config.yaml"]
-    volumes:
-      - ./otel-collector-config.yaml:/etc/otel/config.yaml:ro
-    ports:
-      - "4317:4317"   # gRPC receiver
-    depends_on:
-      - jaeger
-
-  jaeger:
-    profiles: [observability]
-    image: jaegertracing/all-in-one:latest
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-    ports:
-      - "16686:16686"  # Jaeger UI
-      - "14250:14250"  # Jaeger model gRPC (legacy)
-
   sync:
     build: .
     env_file: .env
