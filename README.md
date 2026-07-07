@@ -2,7 +2,7 @@
 
 Syncs ingredients from a Mealie meal plan into any Home Assistant todo list entity — OurGroceries, Bring!, Todoist, the native HA shopping list, or any other todo integration you have configured.
 
-Every HA API call is instrumented with OpenTelemetry, producing a full distributed trace per sync run that you can explore in Jaeger.
+Every HA API call is instrumented with OpenTelemetry, producing a full distributed trace per sync run that you can export to any OTLP-compatible collector.
 
 ---
 
@@ -99,7 +99,7 @@ Copy `.env.example` to `.env` and fill in your values:
 | `DESTINATION_TODO_ENTITY` | yes | — | Destination todo entity, e.g. `todo.shopping_list` |
 | `ITEM_TAG` | no | `` (empty) | Tag string appended/prepended to each synced item; leave empty for no tag |
 | `ITEM_TAG_POSITION` | no | `suffix` | `suffix` or `prefix` |
-| `OTEL_ENABLED` | no | `true` | Set to `false` to disable tracing entirely (no collector required) |
+| `OTEL_ENABLED` | no | `false` | Set to `true` to enable tracing — requires an OTLP collector reachable at `OTEL_EXPORTER_OTLP_ENDPOINT` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | `localhost:4317` | OTel Collector gRPC endpoint (host:port, no scheme) — ignored when `OTEL_ENABLED=false` |
 
 ---
@@ -128,7 +128,7 @@ Without an OTel Collector running, the exporter will log an error but the sync w
 
 ---
 
-## Running with Docker (includes Jaeger tracing UI)
+## Running with Docker
 
 ```bash
 cp .env.example .env
@@ -137,23 +137,11 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts three containers:
-- **sync** — runs the sync script once
-- **otel-collector** — receives traces over gRPC and forwards them to Jaeger
-- **jaeger** — all-in-one Jaeger instance for trace storage and UI
-
-### Viewing traces in Jaeger
-
-Open [http://localhost:16686](http://localhost:16686) in your browser.
-
-1. Select `mealie-ha-todo-sync` from the **Service** dropdown
-2. Click **Find Traces**
-3. Click a trace to see the full span breakdown: root `meal_plan_sync` span with child spans for each HA API call
-
-Each span records:
-- HTTP status code
-- Item counts (ingredients fetched, items removed/added)
-- Errors as span events if any call fails
+This starts a single **sync** container that runs the sync script once. There's
+no bundled tracing backend — set `OTEL_ENABLED=true` and
+`OTEL_EXPORTER_OTLP_ENDPOINT` in `.env` to export traces to a collector of
+your own (each span records HTTP status code, item counts, and errors as
+span events).
 
 ### Scheduling recurring syncs in Docker
 
@@ -187,7 +175,6 @@ requirements.txt
 .env.example
 Dockerfile
 docker-compose.yml
-otel-collector-config.yaml
 ```
 
 ---
