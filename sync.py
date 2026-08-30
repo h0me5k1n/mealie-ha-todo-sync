@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.sdk.resources import Resource
@@ -44,8 +44,18 @@ def _require_env(name: str) -> str:
     return value
 
 
+# Set when _setup_tracing() builds a real provider, so main() can flush it on the
+# way out. This is a oneshot job: the process exits the instant the last span ends,
+# so without an explicit shutdown() the exporter's queue is discarded — which is
+# exactly how a failed run (error span, then sys.exit) never reaches the collector.
+_tracer_provider: "TracerProvider | None" = None
+
+
 def _setup_tracing() -> None:
+    global _tracer_provider
+
     if os.getenv("OTEL_ENABLED", "true").lower() in ("false", "0", "no"):
+        _tracer_provider = None
         trace.set_tracer_provider(NoOpTracerProvider())
         log.info("OTEL_ENABLED=false — tracing disabled")
         return
@@ -57,15 +67,30 @@ def _setup_tracing() -> None:
     resource = Resource.create({"service.name": "mealie-ha-todo-sync"})
     provider = TracerProvider(resource=resource)
     exporter = OTLPSpanExporter(endpoint=endpoint, insecure=True)
-    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
     RequestsInstrumentor().instrument()
+    _tracer_provider = provider
     log.info("Tracing enabled → %s", endpoint)
+
+
+def _shutdown_tracing() -> None:
+    """Flush queued spans before the process exits. BatchSpanProcessor.shutdown()
+    force-flushes then stops the worker; a oneshot process otherwise drops whatever
+    is still queued, including the spans from a run that failed and exited."""
+    if _tracer_provider is not None:
+        _tracer_provider.shutdown()
 
 
 def main() -> None:
     _setup_tracing()
+    try:
+        _run_sync()
+    finally:
+        _shutdown_tracing()
 
+
+def _run_sync() -> None:
     ha_url = _require_env("HA_URL")
     ha_token = _require_env("HA_TOKEN")
     mealie_todo_entity = _require_env("MEALIE_TODO_ENTITY")
