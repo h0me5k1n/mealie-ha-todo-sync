@@ -1,5 +1,5 @@
 requests>=2.34.2
-python-dotenv>=1.2.2
+python-dotenv>=1.2.3
 opentelemetry-sdk>=1.44.0
 opentelemetry-instrumentation-requests>=0.65b0
 opentelemetry-exporter-otlp-proto-grpc>=1.44.0
