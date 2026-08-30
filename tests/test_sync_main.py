@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import types
+
 import pytest
 from opentelemetry.trace import StatusCode
 
@@ -198,3 +200,36 @@ def test_main_invalid_item_tag_position_exits(monkeypatch, otel_state, scripted_
         sync.main()
     assert exc_info.value.code == 1
     assert _spans_named(otel_state, "meal_plan_sync") == []
+
+
+def _install_fake_provider(monkeypatch):
+    """Bypass _setup_tracing and plant a provider whose shutdown() we can observe —
+    a oneshot must flush its span queue or failed runs never reach the collector."""
+    calls = []
+    monkeypatch.setattr(sync, "_setup_tracing", lambda: None)
+    monkeypatch.setattr(
+        sync, "_tracer_provider",
+        types.SimpleNamespace(shutdown=lambda: calls.append("shutdown")),
+        raising=False,
+    )
+    return calls
+
+
+def test_main_flushes_tracer_provider_on_success(monkeypatch, otel_state, scripted_session):
+    _set_required_env(monkeypatch)
+    calls = _install_fake_provider(monkeypatch)
+
+    sync.main()
+
+    assert calls == ["shutdown"]
+
+
+def test_main_flushes_tracer_provider_when_sync_fails(monkeypatch, otel_state):
+    _set_required_env(monkeypatch)
+    monkeypatch.setattr(ha_client.requests, "Session", lambda: _AlwaysFailingSession())
+    calls = _install_fake_provider(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        sync.main()
+
+    assert calls == ["shutdown"]
