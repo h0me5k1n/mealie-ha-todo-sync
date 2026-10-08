@@ -212,16 +212,18 @@ Dependabot PRs are the exception: merging one doesn't trigger an immediate relea
 
 ### Controlling the version bump
 
-Include one of these tokens anywhere in your merge commit message (or in the PR title / any commit on the branch):
+The bump is worked out from the commit messages merged since the last tag, using the [Conventional Commits](https://www.conventionalcommits.org/) format (the release workflow uses [`mathieudutour/github-tag-action`](https://github.com/mathieudutour/github-tag-action)). The highest match wins:
 
-| Token | Effect |
+| Commit message | Bump |
 |---|---|
-| `[MAJOR]` | Bumps the major version — use for breaking changes |
-| `[MINOR]` | Bumps the minor version — use for new backwards-compatible features |
-| `[PATCH]` | Bumps the patch version — use for bug fixes and docs |
-| *(none)* | Defaults to a patch bump |
+| `feat!: ...`, `fix!: ...`, or a `BREAKING CHANGE:` footer | major — breaking changes |
+| `feat: ...` | minor — new backwards-compatible features |
+| `fix: ...` | patch — bug fixes |
+| *(anything else)* | patch (default) |
 
-The PR template pre-populates this guidance when you open a PR.
+A scope is allowed, e.g. `fix(otel): ...`. When a PR is squash-merged the PR title becomes the commit message, so the title is what decides the bump.
+
+The PR template includes this guidance when you open a PR.
 
 ### Pinning a specific version
 

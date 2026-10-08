@@ -4,13 +4,13 @@
 
 ## Version bump
 
-The release is determined automatically from commit messages using these rules (highest match wins):
+The release is determined automatically from commit messages using [Conventional Commits](https://www.conventionalcommits.org/) (highest match wins). When squash-merging, the PR title is the commit message.
 
-| Commit prefix / token | Bump |
+| Commit message | Bump |
 |---|---|
-| `feat:` or `#minor` anywhere in message | minor |
-| `fix:` or `#patch` anywhere in message | patch |
-| `BREAKING CHANGE` or `#major` anywhere in message | major |
+| `feat!: ...`, `fix!: ...`, or a `BREAKING CHANGE:` footer | major |
+| `feat: ...` | minor |
+| `fix: ...` | patch |
 | *(none of the above)* | patch (default) |
 
 ## Checklist

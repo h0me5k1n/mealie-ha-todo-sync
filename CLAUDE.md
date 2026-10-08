@@ -30,7 +30,7 @@ CI runs the tests on Python 3.11, 3.12 and 3.13. Deployments and the Docker imag
 ## Commits, PRs and releases
 
 - Every merge to `main` cuts a release, except commits whose subject starts with `build(deps)`, which are batched into a weekly scheduled release. Use that prefix for dependency-only changes and keep it when squash-merging.
-- Version bump is driven by commit messages (see the PR template). Default is patch.
+- Version bump follows Conventional Commits: `feat:` is minor, `fix:` is patch, `feat!:` or a `BREAKING CHANGE:` footer is major; anything else defaults to patch. Squash-merged PR titles are the commit message, so title PRs accordingly.
 - Update `CHANGELOG.md` for user-visible changes.
 - Do not add `Co-Authored-By` trailers to commits.
 - This repo is public. Never put real IP addresses, hostnames, container IDs or tokens in code, comments, commit messages, PR text or issues. `.env` is local only and must not be committed.
