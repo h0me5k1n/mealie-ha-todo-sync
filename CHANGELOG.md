@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Dependencies are now pinned: `requirements.in` holds the direct dependencies and `requirements.txt` is a pip-compile lockfile with exact versions, so CI and deployments install the same set
+- Dependabot opens a single weekly PR for all Python updates
+- Minimum versions raised: OpenTelemetry 1.45 / 0.66b0, python-dotenv 1.2.4
+
 ## v1.0.0 — 2026-06-01
 
 Initial stable release. Core sync loop is proven in production.

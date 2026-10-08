@@ -171,7 +171,8 @@ tests/
   test_ha_client.py        # HAClient span/attribute/error-path coverage
   test_sync_tracing.py     # _setup_tracing() branch coverage (NoOp vs real provider)
   test_sync_main.py        # End-to-end main() flow, including span-parenting across threads
-requirements.txt
+requirements.in            # Direct dependencies (edit this one)
+requirements.txt           # Pinned lockfile generated from requirements.in by pip-compile
 .env.example
 Dockerfile
 docker-compose.yml
@@ -188,11 +189,26 @@ pytest tests/
 
 ---
 
+## Dependencies
+
+`requirements.in` lists the direct dependencies. `requirements.txt` is a lockfile generated from it by [pip-compile](https://pip-tools.readthedocs.io/), with every package — including transitive ones such as `grpcio` and `protobuf` — pinned to an exact version. CI, the Docker image and any deployment that runs `pip install -r requirements.txt` therefore all install the same set, and a version only changes through a PR that CI has tested.
+
+Don't edit `requirements.txt` by hand. To add or change a dependency, edit `requirements.in` and regenerate the lockfile with Python 3.12:
+
+```bash
+pip install pip-tools
+pip-compile --strip-extras --output-file=requirements.txt requirements.in
+```
+
+Add `--upgrade` to move everything to the latest versions that `requirements.in` allows. Dependabot does this weekly and opens a single PR with all Python updates (see `.github/dependabot.yml`).
+
+---
+
 ## Versioning & Releases
 
 Merging a normal PR to `main` automatically creates a new [GitHub Release](https://github.com/h0me5k1n/mealie-ha-todo-sync/releases) and git tag using [semantic versioning](https://semver.org/).
 
-Dependabot PRs are the exception: merging one doesn't trigger an immediate release. Dependency updates arrive grouped (patch/minor bundled into one PR, major bumps kept separate for review, github-actions bumps in their own PR — see `.github/dependabot.yml`), and are batched into a single release cut by a scheduled job each Wednesday — or no release at all if nothing merged that week.
+Dependabot PRs are the exception: merging one doesn't trigger an immediate release. Dependency updates arrive grouped (all Python updates in one PR, github-actions bumps in another — see `.github/dependabot.yml`), and are batched into a single release cut by a scheduled job each Wednesday — or no release at all if nothing merged that week.
 
 ### Controlling the version bump
 
@@ -218,3 +234,17 @@ git checkout v1.0.0
 ```
 
 If you deploy via an automation tool that clones this repo (e.g. Ansible's `git` module), pass the tag or branch name as the `version` parameter — both are accepted without any special handling.
+
+---
+
+## To do
+
+### Auto-merge the weekly dependency PR
+
+The weekly Dependabot PR is still merged by hand. It can be auto-merged once CI is able to catch the failures the current tests can't:
+
+- [ ] **Add a smoke test to CI.** The existing tests are unit tests with HA and the OTLP exporter mocked, so they would not catch a dependency update that breaks the real HTTP calls or the gRPC trace export. The smoke test should run `sync.py` end to end against:
+  - a **stubbed Home Assistant** — a small HTTP server that answers the REST endpoints `ha_client.py` calls (`/api/` ping, the Mealie `get_shopping_list_items` service, and the `todo` `get_items` / `add_item` / `remove_item` / `update_item` services) and records what it received, so the test can assert that the expected items were written;
+  - a **stubbed OTel endpoint** — an OpenTelemetry Collector container (or a minimal OTLP/gRPC receiver) that the sync exports to, so the test can assert that a `meal_plan_sync` trace actually arrived.
+- [ ] **Make the security checks required.** Add `pip-audit (dependency CVEs)` and `Trivy (container image scan)` to the required status checks on `main`, alongside the three test jobs and the new smoke test.
+- [ ] **Enable auto-merge for the Dependabot PR.** Turn on "Allow auto-merge" in the repo settings and add a workflow that enables auto-merge (squash) on PRs opened by Dependabot, so the weekly PR merges itself when every required check passes. Consider leaving major-version bumps for manual review.
