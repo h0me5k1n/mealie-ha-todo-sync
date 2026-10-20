@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Home Assistant requests now time out (5s connect, 30s read) instead of waiting forever; a stalled connection previously hung the run indefinitely and blocked every later timer-triggered sync
+
 - Dependencies are now pinned: `requirements.in` holds the direct dependencies and `requirements.txt` is a pip-compile lockfile with exact versions, so CI and deployments install the same set
 - Dependabot opens a single weekly PR for all Python updates
 - Minimum versions raised: OpenTelemetry 1.45 / 0.66b0, python-dotenv 1.2.4

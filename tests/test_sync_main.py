@@ -27,11 +27,11 @@ class _FakeSession:
         self._dest_items = dest_items
         self._mealie_ha_items = mealie_ha_items
 
-    def get(self, url):
+    def get(self, url, timeout=None):
         self.calls.append(("GET", url, None))
         return make_response(200)
 
-    def post(self, url, json=None):
+    def post(self, url, json=None, timeout=None):
         payload = json or {}
         self.calls.append(("POST", url, payload))
         entity_id = payload.get("entity_id")
@@ -54,10 +54,10 @@ class _AlwaysFailingSession:
     def __init__(self):
         self.headers = {}
 
-    def get(self, url):
+    def get(self, url, timeout=None):
         return make_response(500)
 
-    def post(self, url, json=None):
+    def post(self, url, json=None, timeout=None):
         return make_response(200, {})
 
 
