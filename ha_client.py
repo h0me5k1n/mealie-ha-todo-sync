@@ -6,6 +6,9 @@ from opentelemetry.trace import Status, StatusCode
 
 tracer = trace.get_tracer("mealie-ha-todo-sync")
 
+# (connect, read) seconds — without this a stalled HA connection hangs the run forever
+REQUEST_TIMEOUT = (5, 30)
+
 
 def _extract_items(data: object) -> list:
     """Extract a flat item list from any HA service response shape."""
@@ -47,7 +50,7 @@ class HAClient:
 
     def _post(self, path: str, payload: dict) -> dict:
         url = f"{self._base}{path}"
-        resp = self._session.post(url, json=payload)
+        resp = self._session.post(url, json=payload, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         return resp.json()
 
@@ -55,7 +58,7 @@ class HAClient:
         with tracer.start_as_current_span("ha.ping") as span:
             try:
                 url = f"{self._base}/api/"
-                resp = self._session.get(url)
+                resp = self._session.get(url, timeout=REQUEST_TIMEOUT)
                 resp.raise_for_status()
                 span.set_attribute("http.status_code", 200)
             except requests.HTTPError as exc:
