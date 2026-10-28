@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- certifi bumped to 2026.10.23: the previous version trusted emSign root CAs whose intermediate CA keys were compromised (GHSA-6q48-6c7w-9gw2)
+
 - Home Assistant requests now time out (5s connect, 30s read) instead of waiting forever; a stalled connection previously hung the run indefinitely and blocked every later timer-triggered sync
 
 - Dependencies are now pinned: `requirements.in` holds the direct dependencies and `requirements.txt` is a pip-compile lockfile with exact versions, so CI and deployments install the same set
