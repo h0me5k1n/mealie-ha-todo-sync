@@ -61,7 +61,7 @@ protobuf==7.36.2
     #   opentelemetry-proto
 pygments==2.21.0
     # via pytest
-pytest==9.1.1
+pytest==9.2.0
     # via -r requirements.in
 python-dotenv==1.2.4
     # via -r requirements.in
